@@ -8,7 +8,7 @@
 #'  adjust for covariates. 
 #' 
 #' @import data.table
-#' @importFrom stats binomial coef glm lm p.adjust confint confint.default na.omit
+#' @importFrom stats binomial coef glm lm p.adjust confint confint.default na.omit complete.cases
 #' @export 
 #' @param df Dataset
 #' @param var Name of the variable or variables of interest- this is usually
@@ -31,6 +31,9 @@
 #' calculates Wald confidence intervals via \code{confint.default}.
 #' @param ref_group Reference category if the variable of interest is a
 #' character or factor. If not, can leave empty. 
+#' @param test_data_quality If TRUE (default), then code will ensure that 
+#' the variance of all variables in the analysis is greater than 0 after 
+#' dropping any missing data.
 #' 
 #' @return
 #' A data frame with 6 columns:  
@@ -87,7 +90,8 @@ owas <- compiler::cmpfun(
            family = "gaussian", 
            confidence_level = 0.95, 
            conf_int = FALSE, 
-           ref_group = NULL){
+           ref_group = NULL, 
+           test_data_quality = TRUE){
     df <- base::as.data.frame(df)
     final_col_names <- ftr_var_group <- NULL
     alpha <- 1-confidence_level
@@ -143,10 +147,33 @@ owas <- compiler::cmpfun(
       stop("family must be either \"gaussian\" or \"binomial\" ")
     }
     
-    
     # Change data frame to data table for speed
     df <- data.table(df)
     
+    
+    # Test whether any variables have a variance of zero -------
+    if(test_data_quality == TRUE){
+      # Drop rows with any missing values in the selected columns
+      df_complete <- df[complete.cases(df[, c(var, omics, covars), with = FALSE]), 
+                        c(var, omics, covars), with = FALSE]
+      
+      # For any non-numeric variables, turn them into factors then numeric
+      var_unique_summary <- df_complete[, lapply(.SD, function(x) {
+        if (is.numeric(x)) var(x, na.rm = TRUE) else (length(unique(x))-1)
+      }), .SDcols = c(var, omics, covars)]
+      
+      var_unique_summary <- as.matrix(var_unique_summary==0)
+      # Check which variables have exactly zero variance
+      zero_var_vars <- colnames(var_unique_summary)[var_unique_summary != 0]
+      
+      if(length(zero_var_vars) > 0){
+        stop(paste0("The following variables have zero variance for complete cases: ", 
+                          paste(zero_var_vars, collapse = ", "), 
+                    ". Please remove before analysis."))
+      }
+    }
+    
+    # Reformat data for functions ------------
     # Pivot longer on omics 
     dt_l <- melt.data.table(
       df,
@@ -171,6 +198,7 @@ owas <- compiler::cmpfun(
     if(var_types == "character" | var_types == "factor") { 
       dt_l2$var_value <- ifelse(dt_l2$var_value == ref_group, 0, 1)
     }
+    
     
     # Set formula for model ------------------
     # depending on whether variable of interest is the exposure or the outcome 
@@ -203,9 +231,9 @@ owas <- compiler::cmpfun(
       if(family == "gaussian"){
         # Linear models:
         res <- dt_l2[, 
-                     {fit <- lm(mod_formula, data = .SD) 
+                     {fit <- lm(mod_formula, data = .SD)
                      coef(summary(fit))[nrow(coef(summary(fit))), 
-                                        c(1, 2, 3, 4)]
+                                        c(1, 2, 3, 4)] 
                      }, 
                      by = ftr_var_group]
         
