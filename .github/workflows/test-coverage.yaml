@@ -28,10 +28,10 @@ jobs:
           extra-packages: any::covr, any::xml2
           needs: coverage
 
-      # - name: git config
-      #   run: |
-      #     git config --global user.name "$GITHUB_ACTOR"
-      #     git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: git config
+        run: |
+          git config --global user.name "$GITHUB_ACTOR"
+          git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Test coverage
         run: |
@@ -64,4 +64,4 @@ jobs:
         with:
           name: coverage-test-failures
           path: ${{ runner.temp }}/package
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
