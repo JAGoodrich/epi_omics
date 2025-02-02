@@ -28,10 +28,10 @@ jobs:
           extra-packages: any::covr, any::xml2
           needs: coverage
 
-      - name: git config
-        run: |
-          git config --global user.name "$GITHUB_ACTOR"
-          git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      # - name: git config
+      #   run: |
+      #     git config --global user.name "$GITHUB_ACTOR"
+      #     git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - name: Test coverage
         run: |
@@ -46,8 +46,8 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           fail_ci_if_error: ${{ github.event_name != 'pull_request' && true || false }}
-          file: ./cobertura.xml
-          plugin: noop
+          files: ./cobertura.xml
+          plugins: noop
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -64,3 +64,4 @@ jobs:
         with:
           name: coverage-test-failures
           path: ${{ runner.temp }}/package
+          token: ${{ secrets.GITHUB_TOKEN }}
