@@ -5,7 +5,7 @@
 #' of interest should be a dichotomous outcome, and the strata is the variable
 #' indicating the matching. 
 #' 
-#' @importFrom stats coef glm lm p.adjust confint confint.default as.formula
+#' @importFrom stats coef glm lm p.adjust confint confint.default as.formula var
 #' @importFrom survival clogit strata coxph Surv
 #' @export 
 #' @param df Dataset
@@ -24,6 +24,9 @@
 #' @param method method used the correct (exact) calculation in the
 #'  conditional likelihood or one of the approximations. Default is "efron". 
 #'  Passed to \code{clogit}.
+#' @param test_data_quality If TRUE (default), then code will ensure that 
+#' the variance of all variables in the analysis is greater than 0 after 
+#' dropping any missing data.
 #' 
 #' @return
 #' A data frame with 6 columns:  
@@ -44,7 +47,8 @@ owas_clogit <- compiler::cmpfun(
            covars = NULL,
            confidence_level = 0.95, 
            conf_int = FALSE, 
-           method = "efron"){
+           method = "efron", 
+           test_data_quality = TRUE){
     
     alpha <- 1-confidence_level
     
@@ -68,6 +72,30 @@ owas_clogit <- compiler::cmpfun(
         "Not all covars are found in the data. Check covar column names."
       )  
     }    
+    
+    # Test whether any omics have a variance of zero -------
+    if(test_data_quality == TRUE){
+      # Change data frame to data table for speed
+      df2 <- data.table(df)
+      # Drop rows with any missing values in the selected columns
+      df_complete <- df2[complete.cases(df2[, c(omics, covars), with = FALSE]), 
+                        c(omics, covars), with = FALSE]
+      
+      # For any non-numeric variables, turn them into factors then numeric
+      var_unique_summary <- df_complete[, lapply(.SD, function(x) {
+        if (is.numeric(x)) var(x, na.rm = TRUE) else (length(unique(x))-1)
+      }), .SDcols = c(omics, covars)]
+      
+      var_unique_summary <- as.matrix(var_unique_summary==0)
+      # Check which variables have exactly zero variance
+      zero_var_vars <- colnames(var_unique_summary)[var_unique_summary != 0]
+      
+      if(length(zero_var_vars) > 0){
+        stop(paste0("The following variables have zero variance for complete cases: ", 
+                    paste(zero_var_vars, collapse = ", "), 
+                    ". Please remove before analysis."))
+      }
+    }
     
 
     # Set formula for model ------------------

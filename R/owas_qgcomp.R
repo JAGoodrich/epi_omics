@@ -7,7 +7,7 @@
 #' continuous or dichotomous outcomes, and provides the option to adjust for 
 #' covariates. 
 #' @import data.table qgcomp
-#' @importFrom stats binomial gaussian coef glm lm p.adjust  
+#' @importFrom stats binomial gaussian coef glm lm p.adjust var
 #' @export 
 #' @param df Dataset
 #' @param expnms Name of the exposures. Can be either continuous or 
@@ -28,6 +28,9 @@
 #' @param run.qgcomp.boot Should the model be fit with qgcomp.boot? See 
 #' package \link[qgcomp]{qgcomp.boot} for details. Default is TRUE. 
 #' Setting to FALSE decreases computational time.  
+#' @param test_data_quality If TRUE (default), then code will ensure that 
+#' the variance of all variables in the analysis is greater than 0 after 
+#' dropping any missing data.
 #' 
 #' @return
 #' A data frame with the following columns:  
@@ -79,7 +82,8 @@ owas_qgcomp <- compiler::cmpfun(
            confidence_level = 0.95, 
            family = "gaussian", 
            rr = TRUE, 
-           run.qgcomp.boot = TRUE){
+           run.qgcomp.boot = TRUE, 
+           test_data_quality = TRUE){
     
     alpha <- 1-confidence_level
     # Get var variable types
@@ -125,6 +129,29 @@ owas_qgcomp <- compiler::cmpfun(
     # Change data frame to data table for speed
     df <- data.table(df)
     
+    # Test whether any variables have a variance of zero -------
+    if(test_data_quality == TRUE){
+      # Drop rows with any missing values in the selected columns
+      df_complete <- df[complete.cases(df[, c(expnms, omics, covars), with = FALSE]), 
+                        c(expnms, omics, covars), with = FALSE]
+      
+      # For any non-numeric variables, turn them into factors then numeric
+      var_unique_summary <- df_complete[, lapply(.SD, function(x) {
+        if (is.numeric(x)) var(x, na.rm = TRUE) else (length(unique(x))-1)
+      }), .SDcols = c(expnms, omics, covars)]
+      
+      var_unique_summary <- as.matrix(var_unique_summary==0)
+      # Check which variables have exactly zero variance
+      zero_var_vars <- colnames(var_unique_summary)[var_unique_summary != 0]
+      
+      if(length(zero_var_vars) > 0){
+        stop(paste0("The following variables have zero variance for complete cases: ", 
+                    paste(zero_var_vars, collapse = ", "), 
+                    ". Please remove before analysis."))
+      }
+    }
+    
+    # Modify Data table -----------
     # Pivot longer  
     dt_l <- melt.data.table(
       df,

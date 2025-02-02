@@ -6,3 +6,4 @@
 ^CRAN-SUBMISSION$
 ^codecov\.yml$
 ^revdep$
+^dev$

@@ -1,3 +1,5 @@
+# epiomics 1.2.0
+
 # epiomics 1.1.0
 
 * Added coef_plot_from_owas() to plot the output of an owas analysis. 
